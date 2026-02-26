@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TTS Subtitle Video Generator</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
+    <!-- COOP/COEP Service Worker to enable SharedArrayBuffer for FFmpeg -->
+    <script src="coi-serviceworker.js"></script>
+    <!-- Tailwind Play CDN — fine for local/internal tools, no build step needed -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+    <!-- JSZip for batch downloads -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- FFmpeg.wasm — served locally so worker.js resolves to same-origin -->
+    <script src="ffmpeg.js"></script>
+    <style>
+        .custom-loader {
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 min-h-screen text-gray-800 p-4 md:p-8 font-sans">
+    <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
+        <div class="bg-blue-600 p-6 text-white">
+            <h1 class="text-3xl font-bold mb-2">TTS Subtitle Video Generator</h1>
+            <p class="text-blue-100">Convert paragraphs into transparent QuickTime videos (.mov) with text-to-speech
+                audio and auto-generated subtitles.</p>
+        </div>
+
+        <div class="p-6">
+            <div id="setupAlert"
+                class="mb-6 p-4 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg flex items-start gap-3">
+                <div class="custom-loader mt-1"></div>
+                <div>
+                    <strong class="block font-semibold">Initializing systems...</strong>
+                    <span id="setupStatusText" class="text-sm">Loading FFmpeg.wasm and models. This might take a
+                        moment.</span>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Select Language / Voice</label>
+                <select id="language"
+                    class="w-full border-gray-300 rounded-lg shadow-sm p-3 border focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 transition-colors">
+                    <option value="en">English - High Quality Female (Kokoro-82M)</option>
+                    <option value="es">Spanish (Xenova/mms-tts-spa)</option>
+                </select>
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Input Script (Separate paragraphs by blank
+                    lines)</label>
+                <textarea id="scriptInput" rows="8"
+                    class="w-full border-gray-300 rounded-lg shadow-sm p-4 border focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 transition-colors resize-y font-mono text-sm leading-relaxed"
+                    placeholder="Line 1: Once upon a time in a digital world...
+
+Line 2: There lived a powerful AI language model..."></textarea>
+                <button id="parseBtn"
+                    class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow transition duration-200 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed">Split
+                    into Paragraph Blocks</button>
+            </div>
+
+            <div class="flex justify-between items-end mb-4 border-b pb-2">
+                <h2 class="text-xl font-bold text-gray-800">Paragraphs Editor</h2>
+                <button id="downloadAllBtn"
+                    class="hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg shadow transition duration-200 text-sm flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                    </svg>
+                    Download All ZIP
+                </button>
+            </div>
+
+            <div id="blocksContainer" class="space-y-4">
+                <p
+                    class="text-gray-500 text-center py-8 italic bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                    Enter a script and click "Split into Paragraph Blocks" to begin.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transformers.js & Kokoro imported as an ES module -->
+    <script type="module">
+        import { KokoroTTS } from 'https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/+esm';
+        import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js';
+
+        // Disable local models for browser use
+        env.allowLocalModels = false;
+        env.useBrowserCache = true;
+
+        const { FFmpeg } = window.FFmpegWASM;
+        const ffmpeg = new FFmpeg();
+        // Pipe all FFmpeg logs to the browser console for debugging
+        ffmpeg.on('log', ({ type, message }) => console.log(`[ffmpeg] ${type}: ${message}`));
+        let isFFmpegLoaded = false;
+
+        let models = {
+            en: null,
+            es: null
+        };
+
+        const ui = {
+            setupAlert: document.getElementById('setupAlert'),
+            setupStatusText: document.getElementById('setupStatusText'),
+            parseBtn: document.getElementById('parseBtn'),
+            scriptInput: document.getElementById('scriptInput'),
+            blocksContainer: document.getElementById('blocksContainer'),
+            language: document.getElementById('language'),
+            downloadAllBtn: document.getElementById('downloadAllBtn'),
+        };
+
+        let generatedFiles = [];
+
+        async function initSystem() {
+            try {
+                // Check if SharedArrayBuffer is available
+                if (typeof SharedArrayBuffer === 'undefined') {
+                    throw new Error("SharedArrayBuffer is not available. Ensure you are using a secure context and COOP/COEP headers are set (coi-serviceworker should handle this if running on localhost).");
+                }
+
+                ui.setupStatusText.textContent = "Loading FFmpeg core...";
+                // ffmpeg.js is served locally, so its internal worker reference (./814.ffmpeg.js)
+                // resolves to http://localhost:8000/814.ffmpeg.js — same-origin, no SecurityError.
+                // The worker can then fetch core/WASM from CDN freely under credentialless COEP.
+                const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd';
+
+                await ffmpeg.load({
+                    coreURL: `${baseURL}/ffmpeg-core.js`,
+                    wasmURL: `${baseURL}/ffmpeg-core.wasm`,
+                });
+
+                ui.setupStatusText.textContent = "FFmpeg loaded. Loading default fonts...";
+
+                // Fetch a default font for rendering text (served locally now)
+                const fontRes = await fetch('font.ttf');
+                const fontData = await fontRes.arrayBuffer();
+                await ffmpeg.writeFile('font.ttf', new Uint8Array(fontData));
+
+                isFFmpegLoaded = true;
+
+                ui.setupAlert.classList.replace('bg-yellow-50', 'bg-green-50');
+                ui.setupAlert.classList.replace('border-yellow-200', 'border-green-200');
+                ui.setupAlert.classList.replace('text-yellow-800', 'text-green-800');
+                ui.setupAlert.querySelector('.custom-loader').style.display = 'none';
+                ui.setupAlert.innerHTML = `<svg class="w-6 h-6 text-green-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> <div><strong class="block font-semibold">System Ready</strong><span class="text-sm">You can now generate videos.</span></div>`;
+
+            } catch (err) {
+                console.error(err);
+                ui.setupAlert.classList.replace('bg-yellow-50', 'bg-red-50');
+                ui.setupAlert.classList.replace('border-yellow-200', 'border-red-200');
+                ui.setupAlert.classList.replace('text-yellow-800', 'text-red-800');
+                ui.setupAlert.querySelector('.custom-loader').style.display = 'none';
+                ui.setupStatusText.textContent = err.message || "Failed to initialize.";
+            }
+        }
+
+
+        // Initialize immediately
+        initSystem();
+
+        ui.parseBtn.addEventListener('click', () => {
+            const text = ui.scriptInput.value.trim();
+            if (!text) return;
+
+            // Split by empty lines
+            const paragraphs = text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+
+            ui.blocksContainer.innerHTML = '';
+            generatedFiles = [];
+            ui.downloadAllBtn.classList.add('hidden');
+
+            paragraphs.forEach((p, idx) => {
+                const blockDiv = document.createElement('div');
+                blockDiv.className = 'bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-4 transition duration-300 hover:shadow-md group';
+
+                const textDiv = document.createElement('div');
+                textDiv.className = 'flex-grow text-gray-700 text-sm leading-relaxed';
+                textDiv.textContent = p;
+
+                const controlsDiv = document.createElement('div');
+                controlsDiv.className = 'flex flex-col gap-3 min-w-[200px] border-t md:border-t-0 md:border-l border-gray-100 pt-3 md:pt-0 md:pl-4';
+
+                const statusP = document.createElement('p');
+                statusP.className = 'text-xs text-gray-500 min-h-[16px] italic';
+
+                const genBtn = document.createElement('button');
+                genBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg text-sm shadow transition duration-150 flex items-center justify-center gap-2';
+                genBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> Generate`;
+
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'hidden flex-col gap-2 mt-2';
+
+                genBtn.onclick = () => processParagraph(idx, p, genBtn, statusP, resultDiv);
+
+                controlsDiv.appendChild(statusP);
+                controlsDiv.appendChild(genBtn);
+                controlsDiv.appendChild(resultDiv);
+
+                blockDiv.appendChild(textDiv);
+                blockDiv.appendChild(controlsDiv);
+
+                ui.blocksContainer.appendChild(blockDiv);
+            });
+        });
+
+        function encodeWAV(samples, sampleRate) {
+            const buffer = new ArrayBuffer(44 + samples.length * 2);
+            const view = new DataView(buffer);
+
+            const writeString = (view, offset, string) => {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            };
+
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + samples.length * 2, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, 1, true); // 1 channel
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, samples.length * 2, true);
+
+            let offset = 44;
+            for (let i = 0; i < samples.length; i++, offset += 2) {
+                let s = Math.max(-1, Math.min(1, samples[i]));
+                view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            }
+            return new Uint8Array(buffer);
+        }
+
+        function formatLines(text, maxCharsPerLine = 45) {
+            // A simple greedy word wrap
+            const words = text.split(/\s+/);
+            const lines = [];
+            let currentLine = [];
+            let currentLen = 0;
+
+            for (const word of words) {
+                if (currentLen + word.length + 1 > maxCharsPerLine && currentLine.length > 0) {
+                    lines.push(currentLine.join(' '));
+                    currentLine = [word];
+                    currentLen = word.length;
+                } else {
+                    currentLine.push(word);
+                    currentLen += word.length + (currentLine.length > 1 ? 1 : 0);
+                }
+            }
+            if (currentLine.length > 0) {
+                lines.push(currentLine.join(' '));
+            }
+            return lines.join('\n');
+        }
+
+        async function processParagraph(index, text, btn, statusP, resultDiv) {
+            if (!isFFmpegLoaded) {
+                alert("FFmpeg is still loading or failed to load.");
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = `<div class="custom-loader border-white border-t-transparent w-4 h-4"></div> Processing...`;
+            btn.classList.add('opacity-75', 'cursor-not-allowed');
+
+            try {
+                const lang = ui.language.value;
+                statusP.textContent = `Loading ML model...`;
+
+                if (!models[lang]) {
+                    if (lang === 'en') {
+                        statusP.textContent = `Downloading Kokoro-82M TTS engine (approx. 180MB, only runs once)...`;
+                        models[lang] = await KokoroTTS.from_pretrained("onnx-community/Kokoro-82M-v1.0-ONNX", {
+                            dtype: "fp32"
+                        });
+                    } else {
+                        models[lang] = await pipeline('text-to-speech', 'Xenova/mms-tts-spa', { quantized: true });
+                    }
+                }
+
+                statusP.textContent = `Generating audio...`;
+
+                let audioData, sampleRate;
+                if (lang === 'en') {
+                    // kokoro-js 1.2.1 pattern: returns { audio: Float32Array, sampling_rate: 24000 }
+                    let output = await models[lang].generate(text, { voice: "af_heart" });
+
+                    // Convert Float32Array to something readable by our encodeWAV array if nested object returned:
+                    if (output.audio && output.audio.data) {
+                        output.audio = output.audio.data;
+                    }
+                    audioData = output.audio;
+                    sampleRate = output.sampling_rate || 24000;
+                } else {
+                    const pipelineResult = await models[lang](text);
+                    audioData = pipelineResult.audio;
+                    sampleRate = pipelineResult.sampling_rate;
+                }
+
+                const wavData = encodeWAV(audioData, sampleRate);
+
+                statusP.textContent = `Exporting video via FFmpeg...`;
+
+                await ffmpeg.writeFile('audio.wav', wavData);
+
+                // Format text to wrap and write to file for drawtext
+                const wrappedText = formatLines(text, 50);
+                await ffmpeg.writeFile('subtitle.txt', wrappedText);
+
+                // Command to create transparent background with audio length
+                // Draw text in the bottom third
+                // qtrle is used for alpha support in mov
+                const outName = `output_${index}.mov`;
+
+                const ret = await ffmpeg.exec([
+                    '-f', 'lavfi',
+                    '-i', 'color=c=black@0.0:s=1920x1080:r=30',
+                    '-i', 'audio.wav',
+                    '-filter_complex', '[0:v]drawtext=fontfile=font.ttf:textfile=subtitle.txt:fontcolor=white:fontsize=48:x=(w-text_w)/2:y=h-(h/3):shadowcolor=black@0.8:shadowx=3:shadowy=3:line_spacing=12[v]',
+                    '-map', '[v]',
+                    '-map', '1:a',
+                    '-c:v', 'qtrle',
+                    '-pix_fmt', 'argb',
+                    '-c:a', 'pcm_s16le',
+                    '-shortest',
+                    outName
+                ]);
+
+                if (ret !== 0) {
+                    throw new Error(`FFmpeg failed (code ${ret}) — open DevTools Console for details`);
+                }
+
+                const fileData = await ffmpeg.readFile(outName);
+                if (!fileData || fileData.length === 0) {
+                    throw new Error('FFmpeg produced an empty file — open DevTools Console for details');
+                }
+                const blob = new Blob([fileData.buffer], { type: 'video/quicktime' });
+                const url = URL.createObjectURL(blob);
+                const filename = `paragraph_${index + 1}.mov`;
+
+                // Update UI to show result
+                btn.style.display = 'none';
+                statusP.style.display = 'none';
+
+                resultDiv.classList.replace('hidden', 'flex');
+                resultDiv.innerHTML = `
+                    <div class="rounded overflow-hidden border border-gray-300 shadow-inner bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCI+PHJlY3Qgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjY2NjIiAvPjxyZWN0IHg9IjEwIiB5PSIxMCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjY2NjIiAvPjwvc3ZnPg==')] bg-repeat">
+                        <video src="${url}" controls class="w-full h-auto bg-black bg-opacity-20 max-h-[150px] object-contain"></video>
+                    </div>
+                    <a href="${url}" download="${filename}" class="mt-1 bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm font-semibold py-2 px-4 rounded border border-gray-300 shadow-sm text-center transition duration-150 flex items-center justify-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        Save .mov
+                    </a>
+                `;
+
+                // Add to generated files and show Download All
+                generatedFiles.push({ index, filename, blob });
+
+                if (generatedFiles.length > 0) {
+                    ui.downloadAllBtn.classList.remove('hidden');
+                }
+
+                // Cleanup ffmpeg fs to save memory
+                await ffmpeg.deleteFile('audio.wav');
+                await ffmpeg.deleteFile('subtitle.txt');
+                await ffmpeg.deleteFile(outName);
+
+            } catch (err) {
+                console.error(err);
+                statusP.textContent = `Error: ${err.message}`;
+                statusP.className = "text-xs text-red-500 font-medium min-h-[16px] break-words";
+
+                btn.disabled = false;
+                btn.innerHTML = `Retry`;
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                btn.classList.replace('bg-blue-600', 'bg-red-500');
+                btn.classList.replace('hover:bg-blue-700', 'hover:bg-red-600');
+            }
+        }
+
+        ui.downloadAllBtn.addEventListener('click', async () => {
+            if (generatedFiles.length === 0) return;
+
+            const originalText = ui.downloadAllBtn.innerHTML;
+            ui.downloadAllBtn.innerHTML = `<div class="custom-loader border-white border-t-transparent w-4 h-4 mr-2"></div> Zipping...`;
+            ui.downloadAllBtn.disabled = true;
+
+            try {
+                const zip = new JSZip();
+                generatedFiles.forEach(f => {
+                    zip.file(f.filename, f.blob);
+                });
+                const content = await zip.generateAsync({ type: 'blob' });
+                const url = URL.createObjectURL(content);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'subtitles_batch.zip';
+                a.click();
+            } catch (err) {
+                console.error("ZIP Error", err);
+                alert("Failed to create ZIP file.");
+            } finally {
+                ui.downloadAllBtn.innerHTML = originalText;
+                ui.downloadAllBtn.disabled = false;
+            }
+        });
+
+    </script>
+</body>
+
+</html>
