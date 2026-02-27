@@ -37,11 +37,24 @@
 </head>
 
 <body class="bg-gray-100 min-h-screen text-gray-800 p-4 md:p-8 font-sans">
-    <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
-        <div class="bg-blue-600 p-6 text-white">
-            <h1 class="text-3xl font-bold mb-2">TTS Subtitle Video Generator</h1>
-            <p class="text-blue-100">Convert paragraphs into transparent QuickTime videos (.mov) with text-to-speech
-                audio and auto-generated subtitles.</p>
+    <div class="max-w-6xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
+        <div class="bg-blue-600 p-6 text-white flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold mb-2">Dual-Language TTS Subtitle Video Generator</h1>
+                <p class="text-blue-100">Convert bilingual paragraphs into transparent QuickTime videos (.mov) with
+                    text-to-speech audio and auto-generated subtitles.</p>
+            </div>
+            <button id="generateAllGlobalBtn" disabled
+                class="bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-8 rounded-lg shadow-lg transition duration-200 text-lg flex items-center gap-2">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z">
+                    </path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Generate All Blocks
+            </button>
         </div>
 
         <div class="p-6">
@@ -55,27 +68,33 @@
                 </div>
             </div>
 
-            <div class="mb-6">
-                <label class="block text-sm font-semibold text-gray-700 mb-2">Select Language / Voice</label>
-                <select id="language"
-                    class="w-full border-gray-300 rounded-lg shadow-sm p-3 border focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 transition-colors">
-                    <option value="en">English - High Quality Female (Kokoro-82M)</option>
-                    <option value="es">Spanish (Xenova/mms-tts-spa)</option>
-                </select>
-            </div>
-
-            <div class="mb-6">
-                <label class="block text-sm font-semibold text-gray-700 mb-2">Input Script (Separate paragraphs by blank
-                    lines)</label>
-                <textarea id="scriptInput" rows="8"
-                    class="w-full border-gray-300 rounded-lg shadow-sm p-4 border focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 transition-colors resize-y font-mono text-sm leading-relaxed"
-                    placeholder="Line 1: Once upon a time in a digital world...
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <!-- English Input -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">English Script (Kokoro-82M)</label>
+                    <textarea id="scriptInputEn" rows="12"
+                        class="w-full border-gray-300 rounded-lg shadow-sm p-4 border focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 transition-colors resize-y font-mono text-sm leading-relaxed"
+                        placeholder="Line 1: Once upon a time in a digital world...
 
 Line 2: There lived a powerful AI language model..."></textarea>
-                <button id="parseBtn"
-                    class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow transition duration-200 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed">Split
-                    into Paragraph Blocks</button>
+                </div>
+
+                <!-- Spanish Input -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Spanish Script
+                        (Xenova/mms-tts-spa)</label>
+                    <textarea id="scriptInputEs" rows="12"
+                        class="w-full border-gray-300 rounded-lg shadow-sm p-4 border focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 transition-colors resize-y font-mono text-sm leading-relaxed"
+                        placeholder="Line 1: Había una vez en un mundo digital...
+
+Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
+                </div>
             </div>
+
+            <button id="parseBtn"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow transition duration-200 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed mb-8">
+                Split into Bilingual Paragraph Blocks
+            </button>
 
             <div class="flex justify-between items-end mb-4 border-b pb-2">
                 <h2 class="text-xl font-bold text-gray-800">Paragraphs Editor</h2>
@@ -85,14 +104,14 @@ Line 2: There lived a powerful AI language model..."></textarea>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
                     </svg>
-                    Download All ZIP
+                    Download Compiled ZIP
                 </button>
             </div>
 
-            <div id="blocksContainer" class="space-y-4">
+            <div id="blocksContainer" class="space-y-6">
                 <p
                     class="text-gray-500 text-center py-8 italic bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                    Enter a script and click "Split into Paragraph Blocks" to begin.</p>
+                    Enter both scripts and click "Split into Bilingual Paragraph Blocks" to begin.</p>
             </div>
         </div>
     </div>
@@ -121,10 +140,11 @@ Line 2: There lived a powerful AI language model..."></textarea>
             setupAlert: document.getElementById('setupAlert'),
             setupStatusText: document.getElementById('setupStatusText'),
             parseBtn: document.getElementById('parseBtn'),
-            scriptInput: document.getElementById('scriptInput'),
+            scriptInputEn: document.getElementById('scriptInputEn'),
+            scriptInputEs: document.getElementById('scriptInputEs'),
             blocksContainer: document.getElementById('blocksContainer'),
-            language: document.getElementById('language'),
             downloadAllBtn: document.getElementById('downloadAllBtn'),
+            generateAllGlobalBtn: document.getElementById('generateAllGlobalBtn'),
         };
 
         let generatedFiles = [];
@@ -177,49 +197,108 @@ Line 2: There lived a powerful AI language model..."></textarea>
         initSystem();
 
         ui.parseBtn.addEventListener('click', () => {
-            const text = ui.scriptInput.value.trim();
-            if (!text) return;
+            const textEn = ui.scriptInputEn.value.trim();
+            const textEs = ui.scriptInputEs.value.trim();
+
+            if (!textEn && !textEs) return;
 
             // Split by empty lines
-            const paragraphs = text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+            const paragraphsEn = textEn ? textEn.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean) : [];
+            const paragraphsEs = textEs ? textEs.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean) : [];
+
+            // Find max length to create paired blocks
+            const maxLen = Math.max(paragraphsEn.length, paragraphsEs.length);
 
             ui.blocksContainer.innerHTML = '';
             generatedFiles = [];
             ui.downloadAllBtn.classList.add('hidden');
+            ui.generateAllGlobalBtn.disabled = maxLen === 0;
 
-            paragraphs.forEach((p, idx) => {
+            for (let idx = 0; idx < maxLen; idx++) {
+                const pEn = paragraphsEn[idx] || "";
+                const pEs = paragraphsEs[idx] || "";
+
                 const blockDiv = document.createElement('div');
-                blockDiv.className = 'bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-4 transition duration-300 hover:shadow-md group';
+                blockDiv.className = 'bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col gap-4 transition duration-300 hover:shadow-md group';
+                blockDiv.id = `block-${idx}`;
 
-                const textDiv = document.createElement('div');
-                textDiv.className = 'flex-grow text-gray-700 text-sm leading-relaxed';
-                textDiv.textContent = p;
+                // Header
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'flex justify-between items-center border-b pb-2 mb-2';
+                headerDiv.innerHTML = `<h3 class="font-bold text-gray-700">Paragraph Block ${idx + 1}</h3>`;
 
-                const controlsDiv = document.createElement('div');
-                controlsDiv.className = 'flex flex-col gap-3 min-w-[200px] border-t md:border-t-0 md:border-l border-gray-100 pt-3 md:pt-0 md:pl-4';
+                // Content Grid
+                const gridDiv = document.createElement('div');
+                gridDiv.className = 'grid grid-cols-1 md:grid-cols-2 gap-6';
 
-                const statusP = document.createElement('p');
-                statusP.className = 'text-xs text-gray-500 min-h-[16px] italic';
+                // English Column
+                const colEn = createLanguageColumn('en', pEn, idx, 'English (Kokoro)');
+                // Spanish Column
+                const colEs = createLanguageColumn('es', pEs, idx, 'Spanish (MMS)');
 
-                const genBtn = document.createElement('button');
-                genBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg text-sm shadow transition duration-150 flex items-center justify-center gap-2';
-                genBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> Generate`;
+                gridDiv.appendChild(colEn.el);
+                gridDiv.appendChild(colEs.el);
 
-                const resultDiv = document.createElement('div');
-                resultDiv.className = 'hidden flex-col gap-2 mt-2';
-
-                genBtn.onclick = () => processParagraph(idx, p, genBtn, statusP, resultDiv);
-
-                controlsDiv.appendChild(statusP);
-                controlsDiv.appendChild(genBtn);
-                controlsDiv.appendChild(resultDiv);
-
-                blockDiv.appendChild(textDiv);
-                blockDiv.appendChild(controlsDiv);
-
+                blockDiv.appendChild(headerDiv);
+                blockDiv.appendChild(gridDiv);
                 ui.blocksContainer.appendChild(blockDiv);
-            });
+
+                // Store references for the global generate all button
+                blockDiv.dataset.enText = pEn;
+                blockDiv.dataset.esText = pEs;
+                blockDiv.enControls = colEn.controls;
+                blockDiv.esControls = colEs.controls;
+            }
         });
+
+        function createLanguageColumn(lang, text, idx, title) {
+            const colDiv = document.createElement('div');
+            colDiv.className = 'flex flex-col gap-3';
+
+            const titleEl = document.createElement('h4');
+            titleEl.className = 'text-sm font-semibold text-gray-600';
+            titleEl.textContent = title;
+
+            const textDiv = document.createElement('div');
+            textDiv.className = 'flex-grow text-gray-700 text-sm leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-100 min-h-[80px]';
+            textDiv.textContent = text || "(No content)";
+
+            const controlsDiv = document.createElement('div');
+            controlsDiv.className = 'flex flex-col gap-2 mt-auto pt-2';
+
+            const statusP = document.createElement('p');
+            statusP.className = 'text-xs text-gray-500 min-h-[16px] italic';
+
+            const genBtn = document.createElement('button');
+            genBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg text-sm shadow transition duration-150 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed';
+
+            if (!text) {
+                genBtn.disabled = true;
+                genBtn.innerHTML = `No Text`;
+            } else {
+                genBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> Generate ${lang.toUpperCase()}`;
+            }
+
+            const resultDiv = document.createElement('div');
+            resultDiv.className = 'hidden flex-col gap-2 mt-2';
+
+            genBtn.onclick = () => {
+                if (text) processParagraph(lang, idx, text, genBtn, statusP, resultDiv);
+            };
+
+            controlsDiv.appendChild(statusP);
+            controlsDiv.appendChild(genBtn);
+            controlsDiv.appendChild(resultDiv);
+
+            colDiv.appendChild(titleEl);
+            colDiv.appendChild(textDiv);
+            colDiv.appendChild(controlsDiv);
+
+            return {
+                el: colDiv,
+                controls: { genBtn, statusP, resultDiv }
+            };
+        }
 
         function encodeWAV(samples, sampleRate) {
             const buffer = new ArrayBuffer(44 + samples.length * 2);
@@ -276,7 +355,14 @@ Line 2: There lived a powerful AI language model..."></textarea>
             return lines.join('\n');
         }
 
-        async function processParagraph(index, text, btn, statusP, resultDiv) {
+        function getFilenameFromText(text, lang, index) {
+            // Take first ~3 words, strip punctuation, lowercase
+            const words = text.replace(/[^\w\s-]/g, '').trim().split(/\s+/).slice(0, 3).join('_').toLowerCase();
+            const fallback = `paragraph_${index + 1}`;
+            return `${lang}_${words || fallback}.mov`;
+        }
+
+        async function processParagraph(lang, index, text, btn, statusP, resultDiv) {
             if (!isFFmpegLoaded) {
                 alert("FFmpeg is still loading or failed to load.");
                 return;
@@ -287,8 +373,9 @@ Line 2: There lived a powerful AI language model..."></textarea>
             btn.classList.add('opacity-75', 'cursor-not-allowed');
 
             try {
-                const lang = ui.language.value;
-                statusP.textContent = `Loading ML model...`;
+                statusP.textContent = `Loading ${lang.toUpperCase()} ML model...`;
+                statusP.style.display = 'block';
+                resultDiv.classList.replace('flex', 'hidden');
 
                 if (!models[lang]) {
                     if (lang === 'en') {
@@ -297,6 +384,7 @@ Line 2: There lived a powerful AI language model..."></textarea>
                             dtype: "fp32"
                         });
                     } else {
+                        statusP.textContent = `Downloading MMS-TTS-SPA engine...`;
                         models[lang] = await pipeline('text-to-speech', 'Xenova/mms-tts-spa', { quantized: true });
                     }
                 }
@@ -305,10 +393,7 @@ Line 2: There lived a powerful AI language model..."></textarea>
 
                 let audioData, sampleRate;
                 if (lang === 'en') {
-                    // kokoro-js 1.2.1 pattern: returns { audio: Float32Array, sampling_rate: 24000 }
                     let output = await models[lang].generate(text, { voice: "af_heart" });
-
-                    // Convert Float32Array to something readable by our encodeWAV array if nested object returned:
                     if (output.audio && output.audio.data) {
                         output.audio = output.audio.data;
                     }
@@ -324,22 +409,18 @@ Line 2: There lived a powerful AI language model..."></textarea>
 
                 statusP.textContent = `Exporting video via FFmpeg...`;
 
-                await ffmpeg.writeFile('audio.wav', wavData);
+                await ffmpeg.writeFile(`audio_${lang}.wav`, wavData);
 
-                // Format text to wrap and write to file for drawtext
                 const wrappedText = formatLines(text, 50);
-                await ffmpeg.writeFile('subtitle.txt', wrappedText);
+                await ffmpeg.writeFile(`subtitle_${lang}.txt`, wrappedText);
 
-                // Command to create transparent background with audio length
-                // Draw text in the bottom third
-                // qtrle is used for alpha support in mov
-                const outName = `output_${index}.mov`;
+                const outName = `output_${lang}_${index}.mov`;
 
                 const ret = await ffmpeg.exec([
                     '-f', 'lavfi',
                     '-i', 'color=c=black@0.0:s=1920x1080:r=30',
-                    '-i', 'audio.wav',
-                    '-filter_complex', '[0:v]drawtext=fontfile=font.ttf:textfile=subtitle.txt:fontcolor=white:fontsize=48:x=(w-text_w)/2:y=h-(h/3):shadowcolor=black@0.8:shadowx=3:shadowy=3:line_spacing=12[v]',
+                    '-i', `audio_${lang}.wav`,
+                    '-filter_complex', `[0:v]format=rgba,colorchannelmixer=aa=0,drawtext=fontfile=font.ttf:textfile=subtitle_${lang}.txt:fontcolor=white:fontsize=48:x=(w-text_w)/2:y=h-(h/3):shadowcolor=black@0.8:shadowx=3:shadowy=3:line_spacing=12[v]`,
                     '-map', '[v]',
                     '-map', '1:a',
                     '-c:v', 'qtrle',
@@ -359,7 +440,7 @@ Line 2: There lived a powerful AI language model..."></textarea>
                 }
                 const blob = new Blob([fileData.buffer], { type: 'video/quicktime' });
                 const url = URL.createObjectURL(blob);
-                const filename = `paragraph_${index + 1}.mov`;
+                const filename = getFilenameFromText(text, lang, index);
 
                 // Update UI to show result
                 btn.style.display = 'none';
@@ -372,21 +453,23 @@ Line 2: There lived a powerful AI language model..."></textarea>
                     </div>
                     <a href="${url}" download="${filename}" class="mt-1 bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm font-semibold py-2 px-4 rounded border border-gray-300 shadow-sm text-center transition duration-150 flex items-center justify-center gap-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                        Save .mov
+                        Save ${lang.toUpperCase()} .mov
                     </a>
                 `;
 
                 // Add to generated files and show Download All
-                generatedFiles.push({ index, filename, blob });
+                generatedFiles.push({ lang, index, filename, blob });
 
                 if (generatedFiles.length > 0) {
                     ui.downloadAllBtn.classList.remove('hidden');
                 }
 
                 // Cleanup ffmpeg fs to save memory
-                await ffmpeg.deleteFile('audio.wav');
-                await ffmpeg.deleteFile('subtitle.txt');
+                await ffmpeg.deleteFile(`audio_${lang}.wav`);
+                await ffmpeg.deleteFile(`subtitle_${lang}.txt`);
                 await ffmpeg.deleteFile(outName);
+
+                return true;
 
             } catch (err) {
                 console.error(err);
@@ -394,12 +477,56 @@ Line 2: There lived a powerful AI language model..."></textarea>
                 statusP.className = "text-xs text-red-500 font-medium min-h-[16px] break-words";
 
                 btn.disabled = false;
-                btn.innerHTML = `Retry`;
+                btn.innerHTML = `Retry ${lang.toUpperCase()}`;
                 btn.classList.remove('opacity-75', 'cursor-not-allowed');
                 btn.classList.replace('bg-blue-600', 'bg-red-500');
                 btn.classList.replace('hover:bg-blue-700', 'hover:bg-red-600');
+                return false;
             }
         }
+
+        ui.generateAllGlobalBtn.addEventListener('click', async () => {
+            if (!isFFmpegLoaded) {
+                alert("Please wait for system to initialize.");
+                return;
+            }
+
+            const blocks = document.querySelectorAll('#blocksContainer > div[id^="block-"]');
+            if (blocks.length === 0) return;
+
+            const originalBtnHtml = ui.generateAllGlobalBtn.innerHTML;
+            ui.generateAllGlobalBtn.innerHTML = `<div class="custom-loader border-white border-t-transparent w-5 h-5 mr-2"></div> Generating All...`;
+            ui.generateAllGlobalBtn.disabled = true;
+            ui.parseBtn.disabled = true;
+
+            for (let i = 0; i < blocks.length; i++) {
+                const block = blocks[i];
+                const enText = block.dataset.enText;
+                const esText = block.dataset.esText;
+
+                // Process English if it exists and hasn't been done (button still visible)
+                if (enText && block.enControls.genBtn.style.display !== 'none') {
+                    // Scroll into view gently
+                    block.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    await processParagraph('en', i, enText, block.enControls.genBtn, block.enControls.statusP, block.enControls.resultDiv);
+                }
+
+                // Process Spanish if it exists and hasn't been done
+                if (esText && block.esControls.genBtn.style.display !== 'none') {
+                    block.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    await processParagraph('es', i, esText, block.esControls.genBtn, block.esControls.statusP, block.esControls.resultDiv);
+                }
+            }
+
+            ui.generateAllGlobalBtn.innerHTML = originalBtnHtml;
+            ui.generateAllGlobalBtn.disabled = false;
+            ui.parseBtn.disabled = false;
+
+            // Scroll back to top to show ZIP download if available
+            if (generatedFiles.length > 0) {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        });
 
         ui.downloadAllBtn.addEventListener('click', async () => {
             if (generatedFiles.length === 0) return;
@@ -410,14 +537,24 @@ Line 2: There lived a powerful AI language model..."></textarea>
 
             try {
                 const zip = new JSZip();
+
+                // Add folders
+                const enFolder = zip.folder("en");
+                const esFolder = zip.folder("es");
+
                 generatedFiles.forEach(f => {
-                    zip.file(f.filename, f.blob);
+                    if (f.lang === 'en') {
+                        enFolder.file(f.filename, f.blob);
+                    } else if (f.lang === 'es') {
+                        esFolder.file(f.filename, f.blob);
+                    }
                 });
+
                 const content = await zip.generateAsync({ type: 'blob' });
                 const url = URL.createObjectURL(content);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'subtitles_batch.zip';
+                a.download = 'bilingual_subtitles_batch.zip';
                 a.click();
             } catch (err) {
                 console.error("ZIP Error", err);
