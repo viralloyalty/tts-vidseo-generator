@@ -52,26 +52,6 @@
             }
         }
 
-        /* preview box styling */
-        #previewBox {
-            position: relative;
-            width: 100%;
-            max-width: 640px;
-            height: 360px;
-            background: #000;
-            margin: 1rem auto;
-            overflow: hidden;
-        }
-
-        #previewSubtitle {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            color: white;
-            font-size: 48px;
-            font-family: var(--subtitle-font, 'Arial');
-            text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.8);
-        }
     </style>
 </head>
 
@@ -131,11 +111,10 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
             </div>
 
             <!-- Customization Controls -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 bg-gray-50 p-6 rounded-lg border border-gray-200">
-                <div class="md:col-span-3">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 bg-gray-50 p-6 rounded-lg border border-gray-200">
+                <div class="md:col-span-2">
                     <h3 class="text-lg font-bold text-gray-800 mb-1">Subtitle Settings</h3>
-                    <p class="text-sm text-gray-500 mb-4">Adjust styling and preview your subtitles before generating.
-                        (These settings apply to all generated videos)</p>
+                    <p class="text-sm text-gray-500 mb-4">Adjust styling applied to all generated videos. Subtitles are always anchored to the bottom of the frame.</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-2 text-gray-700">Font Style</label>
@@ -149,16 +128,6 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
                     <label class="block text-sm font-medium mb-2 text-gray-700">Drop Shadow Size</label>
                     <input type="range" id="shadowRange" min="0" max="10" value="3" class="w-full accent-blue-600" />
                     <div class="flex justify-between text-xs text-gray-400 mt-1"><span>None</span><span>Max</span></div>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-2 text-gray-700">Vertical Position (From Bottom)</label>
-                    <input type="range" id="yPosRange" min="5" max="95" value="33" class="w-full accent-blue-600" />
-                    <div class="flex justify-between text-xs text-gray-400 mt-1"><span>Bottom</span><span>Top</span>
-                    </div>
-                </div>
-                <!-- Preview Box -->
-                <div class="md:col-span-3" id="previewBox">
-                    <div id="previewSubtitle">Once upon a time in a digital world...</div>
                 </div>
             </div>
 
@@ -217,30 +186,13 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
             downloadAllBtn: document.getElementById('downloadAllBtn'),
             generateAllGlobalBtn: document.getElementById('generateAllGlobalBtn'),
             fontSelect: document.getElementById('fontSelect'),
-            shadowRange: document.getElementById('shadowRange'),
-            yPosRange: document.getElementById('yPosRange'),
-            previewSubtitle: document.getElementById('previewSubtitle')
+            shadowRange: document.getElementById('shadowRange')
         };
         const fontFileMap = {
             'Arial': 'Arial-Bold.ttf',
             'Georgia': 'Georgia-Bold.ttf',
             'Verdana': 'Verdana-Bold.ttf'
         };
-        // Update preview when controls change
-        function updatePreview() {
-            const font = ui.fontSelect.value;
-            const shadow = ui.shadowRange.value;
-            const yPos = ui.yPosRange.value;
-            ui.previewSubtitle.style.fontFamily = font;
-            ui.previewSubtitle.style.textShadow = `${shadow}px ${shadow}px 0 rgba(0,0,0,0.8)`;
-            ui.previewSubtitle.style.bottom = `${yPos}%`;
-            ui.previewSubtitle.style.top = '';
-        }
-        ui.fontSelect.addEventListener('change', updatePreview);
-        ui.shadowRange.addEventListener('input', updatePreview);
-        ui.yPosRange.addEventListener('input', updatePreview);
-        // Initialize preview
-        updatePreview();
 
         let generatedFiles = [];
 
@@ -517,7 +469,10 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
                     finalPhrases.push(currentChunk.join(' '));
                 }
 
-                // 2. Calculate Weights based on Characters and Punctuation Pauses
+                // 2. Calculate Weights based on Characters, Word Count, and Punctuation Pauses
+                // TTS speech rate correlates more with syllables/words than raw characters.
+                // We blend character count and word count for a better estimate, then add
+                // punctuation-based pause time (TTS engines insert significant silence at boundaries).
                 let totalWeight = 0;
                 let chunkStats = [];
 
@@ -525,22 +480,29 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
                     let phraseText = finalPhrases[i].trim();
                     if (!phraseText) continue;
 
-                    let weight = phraseText.length; // Base weight: character count
+                    const wordCount = phraseText.split(/\s+/).filter(Boolean).length;
+                    const charCount = phraseText.replace(/\s+/g, '').length;
 
-                    // Add time penalty for TTS pause based on ending punctuation
+                    // Blend: 60% character-based, 40% word-based (normalized to char scale)
+                    // Average word length ~5 chars, so multiply wordCount by 5 to normalize
+                    let weight = 0.6 * charCount + 0.4 * (wordCount * 5);
+
+                    // Punctuation pause penalties (in "character-equivalent" units)
+                    // These represent the actual silence TTS inserts after these tokens
                     if (/[.?!]+$/.test(phraseText)) {
-                        weight += 15; // Wait longer for sentence end (~2-3 words worth)
-                    } else if (/[,;:]+$/.test(phraseText)) {
-                        weight += 7;  // Wait a bit for comma/semicolon (~1 word worth)
+                        weight += 25; // ~500ms equivalent pause at sentence boundary
+                    } else if (/[;:]+$/.test(phraseText)) {
+                        weight += 15; // ~300ms equivalent pause at clause boundary
+                    } else if (/[,]+$/.test(phraseText)) {
+                        weight += 10; // ~200ms equivalent pause at comma
                     }
 
                     totalWeight += weight;
 
                     // Robust escaping for FFmpeg's filter complex
-                    // We escape backslashes, colons, and commas which are separators in filters
                     const safeText = phraseText
                         .replace(/\\/g, '\\\\')
-                        .replace(/'/g, "\\u0027") // Use unicode for single quote
+                        .replace(/'/g, "\\u0027")
                         .replace(/:/g, '\\:')
                         .replace(/,/g, '\\,');
 
@@ -558,22 +520,32 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
 
                 const selectedFont = ui.fontSelect.value;
                 const shadowSize = ui.shadowRange.value;
-                const yPosPercent = 1 - (ui.yPosRange.value / 100);
+
+                // Subtitles anchored to bottom: fontsize=48, margin 30px from bottom
+                const yExpr = 'h-text_h-30';
 
                 let drawfilters = [];
                 let currentStart = 0;
 
+                // TTS models insert ~150ms silence at the start; shift all subtitles forward to compensate
+                const leadingSilenceOffset = 0.15;
+                // TTS models also add trailing silence; shrink usable duration slightly
+                const usableDuration = Math.max(0, durationSeconds - leadingSilenceOffset - 0.1);
+
+                const usableTimePerWeightUnit = usableDuration / totalWeight;
+
                 for (let i = 0; i < chunkStats.length; i++) {
                     const chunk = chunkStats[i];
-                    const chunkDuration = chunk.weight * timePerWeightUnit;
-                    const end = currentStart + chunkDuration;
+                    const chunkDuration = chunk.weight * usableTimePerWeightUnit;
+                    const start = leadingSilenceOffset + currentStart;
+                    const end = start + chunkDuration;
 
-                    // Add some buffer to the last chunk to ensure it doesn't vanish too early
+                    // Last chunk extends to end of audio to avoid subtitle vanishing early
                     const enableEnd = (i === chunkStats.length - 1) ? durationSeconds + 1 : end;
 
-                    drawfilters.push(`drawtext=fontfile=${fontFileMap[selectedFont]}:text='${chunk.text}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=h*${yPosPercent}:shadowcolor=black@0.8:shadowx=${shadowSize}:shadowy=${shadowSize}:enable='between(t,${currentStart.toFixed(3)},${enableEnd.toFixed(3)})'`);
+                    drawfilters.push(`drawtext=fontfile=${fontFileMap[selectedFont]}:text='${chunk.text}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=${yExpr}:shadowcolor=black@0.8:shadowx=${shadowSize}:shadowy=${shadowSize}:enable='between(t,${start.toFixed(3)},${enableEnd.toFixed(3)})'`);
 
-                    currentStart = end;
+                    currentStart += chunkDuration;
                 }
 
                 const drawtextFilter = `[0:v]format=rgba,colorchannelmixer=aa=0,${drawfilters.join(',')}[v]`;
