@@ -221,6 +221,11 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
             yPosRange: document.getElementById('yPosRange'),
             previewSubtitle: document.getElementById('previewSubtitle')
         };
+        const fontFileMap = {
+            'Arial': 'Arial-Bold.ttf',
+            'Georgia': 'Georgia-Bold.ttf',
+            'Verdana': 'Verdana-Bold.ttf'
+        };
         // Update preview when controls change
         function updatePreview() {
             const font = ui.fontSelect.value;
@@ -309,6 +314,7 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
             // Find max length to create paired blocks
             const maxLen = Math.max(paragraphsEn.length, paragraphsEs.length);
 
+            generatedFiles.forEach(f => URL.revokeObjectURL(f.url));
             ui.blocksContainer.innerHTML = '';
             generatedFiles = [];
             ui.downloadAllBtn.classList.add('hidden');
@@ -432,29 +438,6 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
             return new Uint8Array(buffer);
         }
 
-        function formatLines(text, maxCharsPerLine = 45) {
-            // A simple greedy word wrap
-            const words = text.split(/\s+/);
-            const lines = [];
-            let currentLine = [];
-            let currentLen = 0;
-
-            for (const word of words) {
-                if (currentLen + word.length + 1 > maxCharsPerLine && currentLine.length > 0) {
-                    lines.push(currentLine.join(' '));
-                    currentLine = [word];
-                    currentLen = word.length;
-                } else {
-                    currentLine.push(word);
-                    currentLen += word.length + (currentLine.length > 1 ? 1 : 0);
-                }
-            }
-            if (currentLine.length > 0) {
-                lines.push(currentLine.join(' '));
-            }
-            return lines.join('\n');
-        }
-
         function getFilenameFromText(text, lang, index) {
             // Take first ~5 words, strip punctuation, lowercase
             const words = text.replace(/[^\w\s-]/g, '').trim().split(/\s+/).slice(0, 5).join('_').toLowerCase();
@@ -573,11 +556,6 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
 
                 const timePerWeightUnit = durationSeconds / totalWeight;
 
-                const fontFileMap = {
-                    'Arial': 'Arial-Bold.ttf',
-                    'Georgia': 'Georgia-Bold.ttf',
-                    'Verdana': 'Verdana-Bold.ttf'
-                };
                 const selectedFont = ui.fontSelect.value;
                 const shadowSize = ui.shadowRange.value;
                 const yPosPercent = 1 - (ui.yPosRange.value / 100);
@@ -642,7 +620,13 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
                 `;
 
                 // Add to generated files and show Download All
-                generatedFiles.push({ lang, index, filename, blob });
+                const existingIdx = generatedFiles.findIndex(f => f.lang === lang && f.index === index);
+                if (existingIdx !== -1) {
+                    URL.revokeObjectURL(generatedFiles[existingIdx].url);
+                    generatedFiles[existingIdx] = { lang, index, filename, blob, url };
+                } else {
+                    generatedFiles.push({ lang, index, filename, blob, url });
+                }
 
                 if (generatedFiles.length > 0) {
                     ui.downloadAllBtn.classList.remove('hidden');
@@ -739,6 +723,7 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
                 a.href = url;
                 a.download = 'bilingual_subtitles_batch.zip';
                 a.click();
+                URL.revokeObjectURL(url);
             } catch (err) {
                 console.error("ZIP Error", err);
                 alert("Failed to create ZIP file.");

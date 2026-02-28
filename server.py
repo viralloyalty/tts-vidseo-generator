@@ -9,7 +9,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Cross-Origin-Opener-Policy', 'same-origin')
         self.send_header('Cross-Origin-Embedder-Policy', 'credentialless')
         # Prevent HTML from being cached by the service worker (avoids stale JS loading)
-        if self.path.endswith('.html') or self.path == '/' or '?' not in self.path and '.' not in self.path.split('/')[-1]:
+        if self.path.endswith('.html') or self.path == '/' or ('?' not in self.path and '.' not in self.path.split('/')[-1]):
             self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
         super().end_headers()
 
