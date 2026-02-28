@@ -16,6 +16,24 @@
     <!-- FFmpeg.wasm — served locally so worker.js resolves to same-origin -->
     <script src="ffmpeg.js"></script>
     <style>
+        @font-face {
+            font-family: 'Arial';
+            src: url('Arial-Bold.ttf') format('truetype');
+            font-weight: normal;
+        }
+
+        @font-face {
+            font-family: 'Georgia';
+            src: url('Georgia-Bold.ttf') format('truetype');
+            font-weight: normal;
+        }
+
+        @font-face {
+            font-family: 'Verdana';
+            src: url('Verdana-Bold.ttf') format('truetype');
+            font-weight: normal;
+        }
+
         .custom-loader {
             border-top: 3px solid #3b82f6;
             border-radius: 50%;
@@ -32,6 +50,27 @@
             100% {
                 transform: rotate(360deg);
             }
+        }
+
+        /* preview box styling */
+        #previewBox {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            height: 360px;
+            background: #000;
+            margin: 1rem auto;
+            overflow: hidden;
+        }
+
+        #previewSubtitle {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 48px;
+            font-family: var(--subtitle-font, 'Arial');
+            text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.8);
         }
     </style>
 </head>
@@ -91,6 +130,38 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
                 </div>
             </div>
 
+            <!-- Customization Controls -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 bg-gray-50 p-6 rounded-lg border border-gray-200">
+                <div class="md:col-span-3">
+                    <h3 class="text-lg font-bold text-gray-800 mb-1">Subtitle Settings</h3>
+                    <p class="text-sm text-gray-500 mb-4">Adjust styling and preview your subtitles before generating.
+                        (These settings apply to all generated videos)</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-gray-700">Font Style</label>
+                    <select id="fontSelect" class="w-full border-gray-300 rounded shadow-sm focus:ring-blue-500 p-2">
+                        <option value="Arial" selected>Arial</option>
+                        <option value="Georgia">Georgia</option>
+                        <option value="Verdana">Verdana</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-gray-700">Drop Shadow Size</label>
+                    <input type="range" id="shadowRange" min="0" max="10" value="3" class="w-full accent-blue-600" />
+                    <div class="flex justify-between text-xs text-gray-400 mt-1"><span>None</span><span>Max</span></div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-gray-700">Vertical Position (From Bottom)</label>
+                    <input type="range" id="yPosRange" min="5" max="95" value="33" class="w-full accent-blue-600" />
+                    <div class="flex justify-between text-xs text-gray-400 mt-1"><span>Bottom</span><span>Top</span>
+                    </div>
+                </div>
+                <!-- Preview Box -->
+                <div class="md:col-span-3" id="previewBox">
+                    <div id="previewSubtitle">Once upon a time in a digital world...</div>
+                </div>
+            </div>
+
             <button id="parseBtn"
                 class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow transition duration-200 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed mb-8">
                 Split into Bilingual Paragraph Blocks
@@ -145,7 +216,26 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
             blocksContainer: document.getElementById('blocksContainer'),
             downloadAllBtn: document.getElementById('downloadAllBtn'),
             generateAllGlobalBtn: document.getElementById('generateAllGlobalBtn'),
+            fontSelect: document.getElementById('fontSelect'),
+            shadowRange: document.getElementById('shadowRange'),
+            yPosRange: document.getElementById('yPosRange'),
+            previewSubtitle: document.getElementById('previewSubtitle')
         };
+        // Update preview when controls change
+        function updatePreview() {
+            const font = ui.fontSelect.value;
+            const shadow = ui.shadowRange.value;
+            const yPos = ui.yPosRange.value;
+            ui.previewSubtitle.style.fontFamily = font;
+            ui.previewSubtitle.style.textShadow = `${shadow}px ${shadow}px 0 rgba(0,0,0,0.8)`;
+            ui.previewSubtitle.style.bottom = `${yPos}%`;
+            ui.previewSubtitle.style.top = '';
+        }
+        ui.fontSelect.addEventListener('change', updatePreview);
+        ui.shadowRange.addEventListener('input', updatePreview);
+        ui.yPosRange.addEventListener('input', updatePreview);
+        // Initialize preview
+        updatePreview();
 
         let generatedFiles = [];
 
@@ -169,10 +259,20 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
 
                 ui.setupStatusText.textContent = "FFmpeg loaded. Loading default fonts...";
 
-                // Fetch a default font for rendering text (served locally now)
+                // Fetch fonts for rendering text (served locally now)
                 const fontRes = await fetch('font.ttf');
                 const fontData = await fontRes.arrayBuffer();
                 await ffmpeg.writeFile('font.ttf', new Uint8Array(fontData));
+
+                // Load custom fonts into FFmpeg virtual filesystem
+                const customFonts = ['Arial-Bold.ttf', 'Georgia-Bold.ttf', 'Verdana-Bold.ttf'];
+                for (const f of customFonts) {
+                    try {
+                        const res = await fetch(f);
+                        const bData = await res.arrayBuffer();
+                        await ffmpeg.writeFile(f, new Uint8Array(bData));
+                    } catch (e) { console.warn('Could not load font:', f, e); }
+                }
 
                 isFFmpegLoaded = true;
 
@@ -356,8 +456,8 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
         }
 
         function getFilenameFromText(text, lang, index) {
-            // Take first ~3 words, strip punctuation, lowercase
-            const words = text.replace(/[^\w\s-]/g, '').trim().split(/\s+/).slice(0, 3).join('_').toLowerCase();
+            // Take first ~5 words, strip punctuation, lowercase
+            const words = text.replace(/[^\w\s-]/g, '').trim().split(/\s+/).slice(0, 5).join('_').toLowerCase();
             const fallback = `paragraph_${index + 1}`;
             return `${lang}_${words || fallback}.mov`;
         }
@@ -411,16 +511,100 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
 
                 await ffmpeg.writeFile(`audio_${lang}.wav`, wavData);
 
-                const wrappedText = formatLines(text, 50);
-                await ffmpeg.writeFile(`subtitle_${lang}.txt`, wrappedText);
-
                 const outName = `output_${lang}_${index}.mov`;
+
+                // Calculate duration and create chunked subtitles
+                const durationSeconds = audioData.length / sampleRate;
+
+                // 1. Split text into natural chunks (by punctuation or max 8 words)
+                const words = text.split(/\s+/).filter(Boolean);
+                let finalPhrases = [];
+                let currentChunk = [];
+
+                for (const word of words) {
+                    currentChunk.push(word);
+                    // Split if word ends with punctuation OR chunk reached 8 words
+                    const endsWithPunc = /[.?!,;:]+$/.test(word);
+                    if (endsWithPunc || currentChunk.length >= 8) {
+                        finalPhrases.push(currentChunk.join(' '));
+                        currentChunk = [];
+                    }
+                }
+                if (currentChunk.length > 0) {
+                    finalPhrases.push(currentChunk.join(' '));
+                }
+
+                // 2. Calculate Weights based on Characters and Punctuation Pauses
+                let totalWeight = 0;
+                let chunkStats = [];
+
+                for (let i = 0; i < finalPhrases.length; i++) {
+                    let phraseText = finalPhrases[i].trim();
+                    if (!phraseText) continue;
+
+                    let weight = phraseText.length; // Base weight: character count
+
+                    // Add time penalty for TTS pause based on ending punctuation
+                    if (/[.?!]+$/.test(phraseText)) {
+                        weight += 15; // Wait longer for sentence end (~2-3 words worth)
+                    } else if (/[,;:]+$/.test(phraseText)) {
+                        weight += 7;  // Wait a bit for comma/semicolon (~1 word worth)
+                    }
+
+                    totalWeight += weight;
+
+                    // Robust escaping for FFmpeg's filter complex
+                    // We escape backslashes, colons, and commas which are separators in filters
+                    const safeText = phraseText
+                        .replace(/\\/g, '\\\\')
+                        .replace(/'/g, "\\u0027") // Use unicode for single quote
+                        .replace(/:/g, '\\:')
+                        .replace(/,/g, '\\,');
+
+                    chunkStats.push({ text: safeText, weight: weight, raw: phraseText });
+                }
+
+                console.log(`[Sync Debug] Total Duration: ${durationSeconds.toFixed(2)}s, Total Weight: ${totalWeight}`);
+                console.table(chunkStats.map(c => ({
+                    text: c.raw,
+                    weight: c.weight,
+                    percent: ((c.weight / totalWeight) * 100).toFixed(1) + '%'
+                })));
+
+                const timePerWeightUnit = durationSeconds / totalWeight;
+
+                const fontFileMap = {
+                    'Arial': 'Arial-Bold.ttf',
+                    'Georgia': 'Georgia-Bold.ttf',
+                    'Verdana': 'Verdana-Bold.ttf'
+                };
+                const selectedFont = ui.fontSelect.value;
+                const shadowSize = ui.shadowRange.value;
+                const yPosPercent = 1 - (ui.yPosRange.value / 100);
+
+                let drawfilters = [];
+                let currentStart = 0;
+
+                for (let i = 0; i < chunkStats.length; i++) {
+                    const chunk = chunkStats[i];
+                    const chunkDuration = chunk.weight * timePerWeightUnit;
+                    const end = currentStart + chunkDuration;
+
+                    // Add some buffer to the last chunk to ensure it doesn't vanish too early
+                    const enableEnd = (i === chunkStats.length - 1) ? durationSeconds + 1 : end;
+
+                    drawfilters.push(`drawtext=fontfile=${fontFileMap[selectedFont]}:text='${chunk.text}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=h*${yPosPercent}:shadowcolor=black@0.8:shadowx=${shadowSize}:shadowy=${shadowSize}:enable='between(t,${currentStart.toFixed(3)},${enableEnd.toFixed(3)})'`);
+
+                    currentStart = end;
+                }
+
+                const drawtextFilter = `[0:v]format=rgba,colorchannelmixer=aa=0,${drawfilters.join(',')}[v]`;
 
                 const ret = await ffmpeg.exec([
                     '-f', 'lavfi',
                     '-i', 'color=c=black@0.0:s=1920x1080:r=30',
                     '-i', `audio_${lang}.wav`,
-                    '-filter_complex', `[0:v]format=rgba,colorchannelmixer=aa=0,drawtext=fontfile=font.ttf:textfile=subtitle_${lang}.txt:fontcolor=white:fontsize=48:x=(w-text_w)/2:y=h-(h/3):shadowcolor=black@0.8:shadowx=3:shadowy=3:line_spacing=12[v]`,
+                    '-filter_complex', drawtextFilter,
                     '-map', '[v]',
                     '-map', '1:a',
                     '-c:v', 'qtrle',
@@ -466,7 +650,6 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
 
                 // Cleanup ffmpeg fs to save memory
                 await ffmpeg.deleteFile(`audio_${lang}.wav`);
-                await ffmpeg.deleteFile(`subtitle_${lang}.txt`);
                 await ffmpeg.deleteFile(outName);
 
                 return true;
