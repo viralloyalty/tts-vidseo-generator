@@ -391,10 +391,10 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
         }
 
         function getFilenameFromText(text, lang, index) {
-            // Take first ~5 words, strip punctuation, lowercase
+            const padded = String(index + 1).padStart(2, '0');
             const words = text.replace(/[^\w\s-]/g, '').trim().split(/\s+/).slice(0, 5).join('_').toLowerCase();
-            const fallback = `paragraph_${index + 1}`;
-            return `${lang}_${words || fallback}.mov`;
+            const fallback = `paragraph`;
+            return `${lang}_${padded}_${words || fallback}.mov`;
         }
 
         async function processParagraph(lang, index, text, btn, statusP, resultDiv) {
