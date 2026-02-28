@@ -100,8 +100,7 @@ Line 2: There lived a powerful AI language model..."></textarea>
 
                 <!-- Spanish Input -->
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Spanish Script
-                        (Xenova/mms-tts-spa)</label>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Spanish Script (Kokoro-82M)</label>
                     <textarea id="scriptInputEs" rows="12"
                         class="w-full border-gray-300 rounded-lg shadow-sm p-4 border focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 transition-colors resize-y font-mono text-sm leading-relaxed"
                         placeholder="Line 1: Había una vez en un mundo digital...
@@ -419,8 +418,10 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
                             dtype: "fp32"
                         });
                     } else {
-                        statusP.textContent = `Downloading MMS-TTS-SPA engine...`;
-                        models[lang] = await pipeline('text-to-speech', 'Xenova/mms-tts-spa', { quantized: true });
+                        statusP.textContent = `Downloading Kokoro-82M TTS engine (Spanish)...`;
+                        models[lang] = await KokoroTTS.from_pretrained("onnx-community/Kokoro-82M-v1.0-ONNX", {
+                            dtype: "fp32"
+                        });
                     }
                 }
 
@@ -435,9 +436,12 @@ Line 2: Vivía un poderoso modelo de lenguaje de IA..."></textarea>
                     audioData = output.audio;
                     sampleRate = output.sampling_rate || 24000;
                 } else {
-                    const pipelineResult = await models[lang](text);
-                    audioData = pipelineResult.audio;
-                    sampleRate = pipelineResult.sampling_rate;
+                    let output = await models[lang].generate(text, { voice: "ef_dora" });
+                    if (output.audio && output.audio.data) {
+                        output.audio = output.audio.data;
+                    }
+                    audioData = output.audio;
+                    sampleRate = output.sampling_rate || 24000;
                 }
 
                 const wavData = encodeWAV(audioData, sampleRate);
